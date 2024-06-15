@@ -84,41 +84,6 @@ def predict(
 
     return boxes, logits.max(dim=1)[0], phrases
 
-def predict_plus(
-        model,
-        image: torch.Tensor,
-        caption: str,
-        box_threshold_under: float,
-        box_threshold_upper: float,
-        text_threshold: float,
-        device: str = "cuda"
-) -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
-    caption = preprocess_caption(caption=caption)
-
-    model = model.to(device)
-    image = image.to(device)
-
-    with torch.no_grad():
-        outputs = model(image[None], captions=[caption])
-
-    prediction_logits = outputs["pred_logits"].cpu().sigmoid()[0]  # prediction_logits.shape = (nq, 256)
-    prediction_boxes = outputs["pred_boxes"].cpu()[0]  # prediction_boxes.shape = (nq, 4)
-
-    mask = (prediction_logits.max(dim=1)[0] > box_threshold_under) & (prediction_logits.max(dim=1)[0] < box_threshold_upper)
-    logits = prediction_logits[mask]  # logits.shape = (n, 256)
-    boxes = prediction_boxes[mask]  # boxes.shape = (n, 4)
-
-    tokenizer = model.tokenizer
-    tokenized = tokenizer(caption)
-
-    phrases = [
-        get_phrases_from_posmap(logit > text_threshold, tokenized, tokenizer).replace('.', '')
-        for logit
-        in logits
-    ]
-
-    return boxes, logits.max(dim=1)[0], phrases
-
 
 def annotate(image_source: np.ndarray, boxes: torch.Tensor, logits: torch.Tensor, phrases: List[str]) -> np.ndarray:
     h, w, _ = image_source.shape
