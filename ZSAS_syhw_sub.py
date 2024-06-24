@@ -2,10 +2,15 @@
 import sys
 import os
 from datetime import datetime
-sys.path.append('./SegmentAnything/GroundingDINO')
-sys.path.append('./SegmentAnything/SAM')
-sys.path.append('./SegmentAnything')
-sys.path.append('./llama3')
+# sys.path.append('./SegmentAnything/GroundingDINO')
+# sys.path.append('./SegmentAnything/SAM')
+# sys.path.append('./SegmentAnything')
+# sys.path.append('./llama3')
+
+sys.path.append(os.path.abspath('./SegmentAnything/GroundingDINO'))
+sys.path.append(os.path.abspath('./SegmentAnything/SAM'))
+sys.path.append(os.path.abspath('./SegmentAnything'))
+sys.path.append(os.path.abspath('./llama3'))
 
 import random
 import csv
