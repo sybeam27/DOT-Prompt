@@ -281,13 +281,6 @@ def GroundedSAM(grounding_dino_model, sam_model,
             boxes_filt = boxes_filt[filt_size]
             pred_phrases = [pred_phrases[i] for i in filt_size]
             scores = [scores[i] for i in filt_size]
-            
-        # box_max_sizes = torch.max(box_widths, box_heights)
-        # max_size = torch.max(box_max_sizes)
-        # filt_size = torch.nonzero(box_max_sizes < max_size).squeeze(1)
-        # boxes_filt = boxes_filt[filt_size]
-        # pred_phrases = [pred_phrases[i] for i in filt_size]
-        # scores = [scores[i] for i in filt_size]
 
     if filt_db != None:
         for i in range(boxes_filt.size(0)):
