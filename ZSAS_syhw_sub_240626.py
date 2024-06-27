@@ -102,7 +102,7 @@ saa_model = SegmentAnyAnomaly.Model(
     dino_checkpoint=dino_checkpoint,
     sam_checkpoint=sam_checkpoint,
     box_threshold=0.2,
-    text_threshold=1.0,
+    text_threshold=0.2,
     out_size=1024,
     device=DEVICE,
     ).to(DEVICE)

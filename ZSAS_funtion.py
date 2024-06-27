@@ -199,6 +199,7 @@ def anomaly_llama(tokenizer, model, tags):
         input_ids,
         max_new_tokens=256,
         eos_token_id=terminators,
+        pad_token_id=tokenizer.eos_token_id,
         do_sample=True,
         temperature=0.6,
         top_p=0.9,
@@ -449,7 +450,7 @@ def adjectiveclause_llama(tokenizer, model, tags):
     messages = [{"role": "system", "content": """The assistant should always answer only by listing lowercase words in the following format: 'word, word'."""},
                 {"role": "user", "content": f"""The following objects are recognized in the image: {tags}.
                                                 We want to create adjective clauses to prepend to object tags to find unusual or unusual aspects of the recognized object in the image.
-                                                Here, ‘abnormal part’ refers to a damaged or defective part of the product, or a part that is not visible under normal circumstances.
+                                                Here, ‘abnormal’ refers to a damaged or defective part of the product, or a part that is not visible under normal circumstances.
                                                 Based on recognized object tags, adjectives or infinitives are converted to adjective clauses, creating a list that accurately specifies only the singular or unique parts of the object.
                                                 Additionally, an adjective clause can necessarily be converted into 10 different results."""},
             ]
@@ -470,6 +471,7 @@ def adjectiveclause_llama(tokenizer, model, tags):
             input_ids,
             max_new_tokens=256,
             eos_token_id=terminators,
+            pad_token_id=tokenizer.eos_token_id,
             do_sample=True,
             temperature=0.6,
             top_p=0.9,
