@@ -127,6 +127,8 @@ def load_model(model_config_path, model_checkpoint_path, device):
     return model
 
 def get_grounding_output(model, image, caption, box_threshold, text_threshold, device, with_logits=True):
+    if isinstance(caption, list):
+        caption = ' '.join(caption)
     caption = caption.lower()
     caption = caption.strip()
     if not caption.endswith("."):
@@ -429,3 +431,54 @@ def eval_zsas(gt, pred_mask):
     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
     return iou, accuracy, precision, recall, f1_score
+
+def paste_cropped_image(back_image, cropped_image, position):
+    back_image.paste(cropped_image, position)
+    return back_image
+
+def add_word_to_each_item(word_list, word_to_add):
+    words = word_list.split(', ')
+    
+    new_words = [word + ' ' + word_to_add for word in words]
+    
+    result = ', '.join(new_words)
+    
+    return result
+
+def adjectiveclause_llama(tokenizer, model, tags):
+    messages = [{"role": "system", "content": """The assistant should always answer only by listing lowercase words in the following format: 'word, word'."""},
+                {"role": "user", "content": f"""The following objects are recognized in the image: {tags}.
+                                                We want to create adjective clauses to prepend to object tags to find unusual or unusual aspects of the recognized object in the image.
+                                                Here, ‘abnormal part’ refers to a damaged or defective part of the product, or a part that is not visible under normal circumstances.
+                                                Based on recognized object tags, adjectives or infinitives are converted to adjective clauses, creating a list that accurately specifies only the singular or unique parts of the object.
+                                                Additionally, an adjective clause can necessarily be converted into 10 different results."""},
+            ]
+
+    with torch.no_grad():
+        input_ids = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            return_tensors="pt",
+        ).to(model.device)
+
+        terminators = [
+            tokenizer.eos_token_id,
+            tokenizer.convert_tokens_to_ids("<|eot_id|>")
+        ]
+
+        outputs = model.generate(
+            input_ids,
+            max_new_tokens=256,
+            eos_token_id=terminators,
+            do_sample=True,
+            temperature=0.6,
+            top_p=0.9,
+        )
+
+    response = outputs[0][input_ids.shape[-1]:]
+
+    result = tokenizer.decode(response, skip_special_tokens=True)
+
+    finaly_result = add_word_to_each_item(result, tags)
+    print(tags, ':', finaly_result)
+    return finaly_result
