@@ -14,6 +14,7 @@ import random
 from typing import List
 
 import cv2
+import re
 import numpy as np
 import requests
 import stringprep
@@ -41,6 +42,7 @@ from GSA.GroundingDINO.groundingdino.util import box_ops
 from GSA.GroundingDINO.groundingdino.util.inference import annotate
 from GSA.GroundingDINO.groundingdino.util.slconfig import SLConfig
 from GSA.GroundingDINO.groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
+from gdino import GroundingDINOAPIWrapper, visualize
 
 def show_mask(mask, image, random_color=True):
     if random_color:
@@ -314,6 +316,102 @@ def GroundedSAM(grounding_dino_model, sam_model,
     
     return masks, boxes_filt, pred_phrases, scores
 
+def get_grounding_output_2(model, image_path, caption, box_threshold):
+    caption = caption.lower()
+    caption = caption.strip()
+    caption = caption.replace(",", ".")
+    print(caption)
+
+    prompts = dict(image=image_path, prompt=caption)
+
+    with torch.no_grad():
+        results = model.inference(prompts)
+
+    # logits = torch.tensor(results["scores"]).cpu().sigmoid()
+    scores = torch.tensor(results["scores"]).cpu()
+    boxes = torch.tensor(results["boxes"]).cpu()
+    categorys = results["categorys"]
+
+    scores_filt = scores.clone()
+    boxes_filt = boxes.clone()
+    categorys_filt = categorys.copy()
+
+    filt_mask = (scores_filt > box_threshold)
+    scores_filt = scores_filt[filt_mask]
+    boxes_filt = boxes_filt[filt_mask]
+    categorys_filt = list(np.array(categorys_filt)[np.array(filt_mask)])
+
+    print(f"boxes_filt shape: {boxes_filt.shape}")
+    print(f"boxes_filt content: {boxes_filt}")
+
+    if boxes_filt.dim() == 1 and boxes_filt.numel() % 4 == 0:
+        boxes_filt = boxes_filt.view(-1, 4)
+    elif boxes_filt.dim() != 2 or boxes_filt.size(1) != 4:
+        raise ValueError(f"Expected boxes_filt to be [num_boxes, 4], but got shape {boxes_filt.shape}")
+
+    pred_phrases = []
+    for logit, box, category in zip(scores_filt, boxes_filt, categorys_filt):
+        pred_phrases.append(category + f"({str(logit.max().item())[:4]})")
+
+    return boxes_filt, pred_phrases, scores_filt
+
+def GroundedSAM_2(grounding_dino_model, sam_model, 
+                  source_image, raw_image, image_path, 
+                  box_threshold2, tags, device, filt_bb=1):
+    
+    boxes_filt, pred_phrases, scores = get_grounding_output_2(grounding_dino_model, image_path, tags, box_threshold2)
+    print("GroundingDINO1.5 finished")
+
+    # run SAM
+    sam_model.set_image(source_image)
+    size = raw_image.size
+
+    H, W = size[1], size[0]
+    for i in range(boxes_filt.size(0)):
+        boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
+        boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
+        boxes_filt[i][2:] += boxes_filt[i][:2]
+
+    boxes_filt = boxes_filt.cpu()
+    
+    # use NMS to handle overlapped boxes
+    print(f"Before NMS: {boxes_filt.shape[0]} boxes")
+    # if len(boxes_filt) >= 2:
+    #         boxes_filt = remove_large_boxes(boxes_filt, W, H)
+    
+    nms_idx = torchvision.ops.nms(boxes_filt, scores, iou_threshold).numpy().tolist()
+    boxes_filt = boxes_filt[nms_idx]
+    pred_phrases = [pred_phrases[idx] for idx in nms_idx]
+    scores = [scores[idx] for idx in nms_idx]
+
+    print(f"After NMS: {boxes_filt.shape[0]} boxes")
+
+    if filt_bb != 1:
+        print('Original boxes: ', boxes_filt)
+        for i in range(boxes_filt.size(0)):
+            x_min, y_min, x_max, y_max = boxes_filt[i].tolist()
+            new_x_min, new_y_min, new_x_max, new_y_max = enlarge_bounding_box(x_min, y_min, x_max, y_max, scale=filt_bb)
+            boxes_filt[i] = torch.tensor([new_x_min, new_y_min, new_x_max, new_y_max])        
+        
+        boxes_filt[:, [0, 2]] = boxes_filt[:, [0, 2]].clamp(0, W)
+        boxes_filt[:, [1, 3]] = boxes_filt[:, [1, 3]].clamp(0, H)
+
+        print('{} times enlarged boxes: '.format(filt_bb), boxes_filt)
+        transformed_boxes = sam_model.transform.apply_boxes_torch(boxes_filt, (H, W)).to(device)
+    else:
+        print('{} times enlarged boxes: '.format(filt_bb), boxes_filt)
+        transformed_boxes = sam_model.transform.apply_boxes_torch(boxes_filt, (H, W)).to(device)
+
+    masks, _, _ = sam_model.predict_torch(
+        point_coords=None,
+        point_labels=None,
+        boxes=transformed_boxes.to(device),
+        multimask_output=False,
+    )
+    print("SAM finished")
+
+    return masks, boxes_filt, pred_phrases, scores
+
 def inpainting(image, image_path, device,
                boxes_filt, scores_filt, pred_phrases, masks, 
                main_name, sub_name, sub_number, 
@@ -482,5 +580,246 @@ def adjectiveclause_llama(tokenizer, model, tags):
     result = tokenizer.decode(response, skip_special_tokens=True)
 
     finaly_result = add_word_to_each_item(result, tags)
+    finaly_result = clean_string(finaly_result)
+    
     print(tags, ':', finaly_result)
+    
     return finaly_result
+
+def clean_string(s):
+    if s is None:
+        return ""
+    
+    s = s.replace("''", "").replace('""', "")
+
+    s = s.replace("word", "")
+    
+    s = s.replace("None", "").replace("none", "")
+
+    s = re.sub(r'\bof\b', '', s)
+    
+    parts = s.split(',')
+    cleaned_parts = []
+    
+    for part in parts:
+        words = part.split()
+        unique_words = list(dict.fromkeys(words))
+        cleaned_parts.append(' '.join(unique_words))
+
+    cleaned_string = ','.join(cleaned_parts)
+    
+    if cleaned_string.startswith(','):
+        cleaned_string = cleaned_string[1:]
+    
+    cleaned_string = cleaned_string.strip()
+
+    return cleaned_string
+
+def Noun_Adjective_Classification(tokenizer, model, tags, main_name, sub_name, device):
+    messages = [{"role": "system", "content": "Assistant is always must be listed as words in lowercase format."},                 
+
+    {"role": "user", "content": f"""
+                                    Objects recognized in the image include: {tags}.
+
+                                    I would like to divide them according to the degree to which they are related to {main_name} and {sub_name}.
+                                    Please classify according to the information below.
+
+                                    1. Please classify nouns related to {main_name} into the Nouns list.
+                                    2. Please classify Nouns related to {sub_name} into the Adjectives list.
+                                    3. Please delete objects that are not classified above.
+                                    4. Outputs a list of each noun and adjective according to the system output format.
+
+                                    The noun list is
+                                        Nouns: word, word
+                                    The adjective list is
+                                        Adjective: word, word
+                                    Please save the results in the format
+                                    """},]
+    nouns_result = ""
+    while not nouns_result :
+        with torch.no_grad():
+            input_ids = tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            ).to(device)
+
+            terminators = [
+                tokenizer.eos_token_id,
+                tokenizer.convert_tokens_to_ids("<|eot_id|>")
+            ]
+
+            outputs = model.generate(
+                input_ids,
+                max_new_tokens=256,
+                eos_token_id=terminators,
+                pad_token_id=tokenizer.eos_token_id,
+                do_sample=True,
+                temperature=0.6,
+                top_p=0.9,
+            )
+
+        response = outputs[0][input_ids.shape[-1]:]
+
+        result = tokenizer.decode(response, skip_special_tokens=True)
+        
+        nouns_match = re.search(rf'{re.escape("Nouns: ")}(.*)', result)
+        adjective_match = re.search(rf'{re.escape("Adjective: ")}(.*)', result)
+
+        nouns_result = nouns_match.group(1).strip() if nouns_match else ""
+        adjectives_result = adjective_match.group(1).strip() if adjective_match else ""
+        print('Rotate until the noun list is filled.')
+        print("nouns: ",nouns_result)
+        print("adjectives: ",adjectives_result)
+        print('-'*100)
+    
+    anomaly_word = '''faded, twisted, torn, cracked, rusty, slanted, brindled, there is a hole, broken, discolored, 
+                dented, worn out, scratched, distorted, there is a gap, wrong, unbalanced, 
+                unexpectedly distorted, surprisingly uneven, strangely misshapen, peculiarly warped, oddly colored, 
+                unnaturally bright, weirdly textured, unusually large, bizarrely placed, inexplicably cracked, 
+                uncommonly rough, mysteriously smooth, abnormally small, unnaturally twisted, strangely elongated, 
+                unexpectedly shrunken, oddly reflective, peculiarly bumpy, weirdly shiny, unexpectedly dull, 
+                partially melted, partially frozen, irregularly shaped, unusually heavy, unusually light, 
+                slightly burned, slightly corroded, strangely inflated, unusually deflated, oddly fragmented'''
+    if sub_name not in anomaly_word:
+            anomaly_word = anomaly_word + ',' + sub_name
+
+    print('Finally Result')
+    print("nouns: ",nouns_result)
+    nouns_cleaned_string = clean_string(nouns_result)
+    if nouns_cleaned_string and main_name not in nouns_cleaned_string:
+            nouns_combined_string = nouns_cleaned_string + ',' + main_name
+    else:
+        nouns_combined_string = main_name
+    print("clean_nouns: ",nouns_combined_string)
+
+    print('-'*100)
+
+    print("adjectives: ",adjectives_result)
+    adjectives_cleaned_string = clean_string(adjectives_result)
+    if adjectives_cleaned_string and sub_name not in adjectives_cleaned_string:
+        adjectives_combined_string = adjectives_cleaned_string + ',' + anomaly_word
+    else:
+        adjectives_combined_string = anomaly_word
+    print("clean_adjectives: ",adjectives_combined_string)
+
+    nouns_list = nouns_combined_string.split(',')
+    adjectives_list = adjectives_combined_string.split(',')
+
+    combined_result = []
+    for noun in nouns_list:
+        for adjective in adjectives_list:
+            combined_result.append(f"{adjective.strip()} {noun.strip()}")
+
+    finally_combined_string = ','.join(combined_result)
+
+    return finally_combined_string
+
+def classification_adjectiveclause_llama(tokenizer, model, tags, main_name, sub_name, device):
+    classification_messages = [{"role": "system", "content": "Assistant is always must be listed as words in lowercase format."},                 
+
+    {"role": "user", "content": f"""
+                                    Objects recognized in the image include: {tags}.
+
+                                    I would like to divide them according to the degree to which they are related to {main_name} and {sub_name}.
+                                    Please classify according to the information below.
+
+                                    1. Please classify nouns related to {main_name} into the Nouns list.
+                                    2. Please classify Nouns related to {sub_name} into the Adjectives list.
+                                    3. Please delete objects that are not classified above.
+                                    4. Outputs a list of each noun and adjective according to the system output format. noun: 'word, word'
+
+                                    The noun list is
+                                        Nouns: word, word
+                                    The adjective list is
+                                        Adjective: word, word
+                                    Please save the results in the format
+                                    """},]
+    nouns_result = ""
+    while not nouns_result :
+        with torch.no_grad():
+            input_ids = tokenizer.apply_chat_template(
+                classification_messages,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            ).to(device)
+
+            terminators = [
+                tokenizer.eos_token_id,
+                tokenizer.convert_tokens_to_ids("<|eot_id|>")
+            ]
+
+            outputs = model.generate(
+                input_ids,
+                max_new_tokens=256,
+                eos_token_id=terminators,
+                pad_token_id=tokenizer.eos_token_id,
+                do_sample=True,
+                temperature=0.6,
+                top_p=0.9,
+            )
+
+        classification_response = outputs[0][input_ids.shape[-1]:]
+
+        classification_result = tokenizer.decode(classification_response, skip_special_tokens=True)
+        
+        nouns_match = re.search(rf'{re.escape("Nouns: ")}(.*)', classification_result)
+
+        nouns_result = nouns_match.group(1).strip() if nouns_match else ""
+        print('Rotate until the noun list is filled.')
+        print("nouns: ",nouns_result)
+        print('-'*100)
+
+    print('Finally Result')
+    print("nouns: ",nouns_result)
+    nouns_cleaned_string = clean_string(nouns_result)
+    if nouns_cleaned_string:
+        if main_name not in nouns_cleaned_string:
+            nouns_combined_string = nouns_cleaned_string + ',' + main_name
+        else:
+            nouns_combined_string = nouns_cleaned_string
+    else:
+        nouns_combined_string = main_name
+
+    print("clean_nouns: ",nouns_combined_string)
+    print('-'*100)
+    
+    llama_tags = ''
+    for word in nouns_combined_string.split(','):
+        adjectives_messages = [{"role": "system", "content": """The assistant should always answer only by listing lowercase words in the following format: 'word, word'."""},
+            {"role": "user", "content": f"""Objects recognized in the image include: {word}.
+                                            I would like to create an adjective clause before the object tag to find anomaly parts of the recognized object in the image.
+                                            
+                                            Based on recognized object tags, adjectives or infinitives are converted to adjective clauses, creating a list that accurately specifies only the singular or unique part of the object.
+                                            Additionally, adjective clauses must be converted into 10 non-redundant results."""},]
+        with torch.no_grad():
+            input_ids = tokenizer.apply_chat_template(
+                adjectives_messages,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            ).to(model.device)
+
+            terminators = [
+                tokenizer.eos_token_id,
+                tokenizer.convert_tokens_to_ids("<|eot_id|>")
+            ]
+
+            outputs = model.generate(
+                input_ids,
+                max_new_tokens=256,
+                eos_token_id=terminators,
+                pad_token_id=tokenizer.eos_token_id,
+                do_sample=True,
+                temperature=0.6,
+                top_p=0.9,
+            )
+
+        adjectives_response = outputs[0][input_ids.shape[-1]:]
+        adjectives_result = tokenizer.decode(adjectives_response, skip_special_tokens=True)
+        finally_result = add_word_to_each_item(adjectives_result, word)
+        finally_result = clean_string(finally_result)
+        print(word, ':', finally_result)
+
+        llama_tags = llama_tags + finally_result
+
+    return llama_tags
