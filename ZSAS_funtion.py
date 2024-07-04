@@ -42,7 +42,7 @@ from GSA.GroundingDINO.groundingdino.util import box_ops
 from GSA.GroundingDINO.groundingdino.util.inference import annotate
 from GSA.GroundingDINO.groundingdino.util.slconfig import SLConfig
 from GSA.GroundingDINO.groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
-from gdino import GroundingDINOAPIWrapper, visualize
+# from gdino import GroundingDINOAPIWrapper, visualize
 
 def show_mask(mask, image, random_color=True):
     if random_color:
