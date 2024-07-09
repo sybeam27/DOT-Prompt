@@ -129,12 +129,15 @@ def load_model(model_config_path, model_checkpoint_path, device):
     return model
 
 def get_grounding_output(model, image, caption, box_threshold, text_threshold, device, with_logits=True):
+    print(caption)
     if isinstance(caption, list):
         caption = ' '.join(caption)
     caption = caption.lower()
     caption = caption.strip()
+    caption = caption.replace(",", ".")
     if not caption.endswith("."):
         caption = caption + "."
+    print(caption)
 
     model = model.to(device)
     image = image.to(device)
@@ -148,7 +151,6 @@ def get_grounding_output(model, image, caption, box_threshold, text_threshold, d
     logits_filt = logits.clone()
     boxes_filt = boxes.clone()
 
-    # filt_mask = logits_filt.max(dim=1)[0] > box_threshold1
     filt_mask = (logits_filt.max(dim=1)[0] > box_threshold) 
     logits_filt = logits_filt[filt_mask]  # num_filt, 256
     boxes_filt = boxes_filt[filt_mask]  # num_filt, 4
@@ -316,19 +318,18 @@ def GroundedSAM(grounding_dino_model, sam_model,
     
     return masks, boxes_filt, pred_phrases, scores
 
-def get_grounding_output_2(model, image_path, caption, box_threshold):
+def get_grounding_output_2(model, image_path, caption, box_threshold, with_logits=True):
     caption = caption.lower()
     caption = caption.strip()
     caption = caption.replace(",", ".")
-    print(caption)
 
     prompts = dict(image=image_path, prompt=caption)
 
     with torch.no_grad():
         results = model.inference(prompts)
 
-    # logits = torch.tensor(results["scores"]).cpu().sigmoid()
-    scores = torch.tensor(results["scores"]).cpu()
+    # logits = torch.tensor(results["scores"]).cpu()
+    scores = torch.tensor(results["scores"]).cpu().sigmoid()
     boxes = torch.tensor(results["boxes"]).cpu()
     categorys = results["categorys"]
 
@@ -341,8 +342,8 @@ def get_grounding_output_2(model, image_path, caption, box_threshold):
     boxes_filt = boxes_filt[filt_mask]
     categorys_filt = list(np.array(categorys_filt)[np.array(filt_mask)])
 
-    print(f"boxes_filt shape: {boxes_filt.shape}")
-    print(f"boxes_filt content: {boxes_filt}")
+    # print(f"boxes_filt shape: {boxes_filt.shape}")
+    # print(f"boxes_filt content: {boxes_filt}")
 
     if boxes_filt.dim() == 1 and boxes_filt.numel() % 4 == 0:
         boxes_filt = boxes_filt.view(-1, 4)
@@ -351,13 +352,17 @@ def get_grounding_output_2(model, image_path, caption, box_threshold):
 
     pred_phrases = []
     for logit, box, category in zip(scores_filt, boxes_filt, categorys_filt):
-        pred_phrases.append(category + f"({str(logit.max().item())[:4]})")
+        
+        if with_logits:
+            pred_phrases.append(category + f"({str(logit.max().item())[:4]})")
+        else:
+            pred_phrases.append(category)
 
     return boxes_filt, pred_phrases, scores_filt
 
 def GroundedSAM_2(grounding_dino_model, sam_model, 
                   source_image, raw_image, image_path, 
-                  box_threshold2, tags, device, filt_bb=1):
+                  box_threshold2, tags, device, iou_threshold, size_threshold=None, filt_db=None, filt_ds=None, filt_bb=1):
     
     boxes_filt, pred_phrases, scores = get_grounding_output_2(grounding_dino_model, image_path, tags, box_threshold2)
     print("GroundingDINO1.5 finished")
@@ -374,10 +379,7 @@ def GroundedSAM_2(grounding_dino_model, sam_model,
 
     boxes_filt = boxes_filt.cpu()
     
-    # use NMS to handle overlapped boxes
     print(f"Before NMS: {boxes_filt.shape[0]} boxes")
-    # if len(boxes_filt) >= 2:
-    #         boxes_filt = remove_large_boxes(boxes_filt, W, H)
     
     nms_idx = torchvision.ops.nms(boxes_filt, scores, iou_threshold).numpy().tolist()
     boxes_filt = boxes_filt[nms_idx]
@@ -386,20 +388,31 @@ def GroundedSAM_2(grounding_dino_model, sam_model,
 
     print(f"After NMS: {boxes_filt.shape[0]} boxes")
 
-    if filt_bb != 1:
-        print('Original boxes: ', boxes_filt)
+    if size_threshold is not None and len(boxes_filt) > 1:
+        box_widths = (boxes_filt[:, 2] - boxes_filt[:, 0])/W # x_max - x_min
+        box_heights = (boxes_filt[:, 3] - boxes_filt[:, 1])/H  # y_max - y_min
+
+        # size_threshold의 각 값을 사용하여 조건에 맞는 인덱스를 찾음
+        filt1_idx = torch.nonzero(box_widths < size_threshold[0]).squeeze(1)
+        filt2_idx = torch.nonzero(box_heights < size_threshold[1]).squeeze(1)
+        combined_indices = torch.cat((filt1_idx, filt2_idx))
+        filt_size = torch.unique(combined_indices)
+
+        if len(filt_size) != len(boxes_filt):
+            boxes_filt = boxes_filt[filt_size]
+            pred_phrases = [pred_phrases[i] for i in filt_size]
+            scores = [scores[i] for i in filt_size]
+
+    if filt_db != None:
         for i in range(boxes_filt.size(0)):
             x_min, y_min, x_max, y_max = boxes_filt[i].tolist()
-            new_x_min, new_y_min, new_x_max, new_y_max = enlarge_bounding_box(x_min, y_min, x_max, y_max, scale=filt_bb)
+            new_x_min, new_y_min, new_x_max, new_y_max = dilate_bounding_box(x_min, y_min, x_max, y_max, scale=filt_db)
             boxes_filt[i] = torch.tensor([new_x_min, new_y_min, new_x_max, new_y_max])        
         
         boxes_filt[:, [0, 2]] = boxes_filt[:, [0, 2]].clamp(0, W)
         boxes_filt[:, [1, 3]] = boxes_filt[:, [1, 3]].clamp(0, H)
-
-        print('{} times enlarged boxes: '.format(filt_bb), boxes_filt)
         transformed_boxes = sam_model.transform.apply_boxes_torch(boxes_filt, (H, W)).to(device)
     else:
-        print('{} times enlarged boxes: '.format(filt_bb), boxes_filt)
         transformed_boxes = sam_model.transform.apply_boxes_torch(boxes_filt, (H, W)).to(device)
 
     masks, _, _ = sam_model.predict_torch(
@@ -408,7 +421,14 @@ def GroundedSAM_2(grounding_dino_model, sam_model,
         boxes=transformed_boxes.to(device),
         multimask_output=False,
     )
-    print("SAM finished")
+    
+    if masks is None:
+        masks = boxes_filt
+    
+    if filt_ds != None:
+        for i in range(len(masks)):
+            dil = dilate_segment_mask(masks[i][0].cpu().numpy().astype(np.uint8), kernel_size=filt_ds, iterations=1)
+            masks[i][0] = torch.tensor(dil > 0)
 
     return masks, boxes_filt, pred_phrases, scores
 
@@ -536,11 +556,11 @@ def paste_cropped_image(back_image, cropped_image, position):
     return back_image
 
 def add_word_to_each_item(word_list, word_to_add):
-    words = word_list.split(', ')
+    words = word_list.split(',')
     
     new_words = [word + ' ' + word_to_add for word in words]
     
-    result = ', '.join(new_words)
+    result = ','.join(new_words)
     
     return result
 
@@ -580,24 +600,26 @@ def adjectiveclause_llama(tokenizer, model, tags):
     result = tokenizer.decode(response, skip_special_tokens=True)
 
     finaly_result = add_word_to_each_item(result, tags)
-    finaly_result = clean_string(finaly_result)
+    finaly_result = clean_string(finaly_result, "")
     
     print(tags, ':', finaly_result)
     
     return finaly_result
 
-def clean_string(s):
+def clean_string(s, main):
     if s is None:
         return ""
     
     s = s.replace("''", "").replace('""', "")
 
-    s = s.replace("word", "")
+    s = s.replace("word", "").replace("Word", "")
     
-    s = s.replace("None", "").replace("none", "")
+    s = s.replace("none", "").replace("None", "")
 
     s = re.sub(r'\bof\b', '', s)
     
+    # s = re.sub(r'\bpart\b', '', s)
+
     parts = s.split(',')
     cleaned_parts = []
     
@@ -612,6 +634,13 @@ def clean_string(s):
         cleaned_string = cleaned_string[1:]
     
     cleaned_string = cleaned_string.strip()
+
+    final_parts = []
+    for part in cleaned_string.split(','):
+        if part.strip() != main:
+            final_parts.append(part)
+
+    cleaned_string = ','.join(final_parts)
 
     return cleaned_string
 
@@ -686,9 +715,9 @@ def Noun_Adjective_Classification(tokenizer, model, tags, main_name, sub_name, d
 
     print('Finally Result')
     print("nouns: ",nouns_result)
-    nouns_cleaned_string = clean_string(nouns_result)
+    nouns_cleaned_string = clean_string(nouns_result,"")
     if nouns_cleaned_string and main_name not in nouns_cleaned_string:
-            nouns_combined_string = nouns_cleaned_string + ',' + main_name
+            nouns_combined_string = nouns_cleaned_string + '.' + main_name
     else:
         nouns_combined_string = main_name
     print("clean_nouns: ",nouns_combined_string)
@@ -696,22 +725,22 @@ def Noun_Adjective_Classification(tokenizer, model, tags, main_name, sub_name, d
     print('-'*100)
 
     print("adjectives: ",adjectives_result)
-    adjectives_cleaned_string = clean_string(adjectives_result)
+    adjectives_cleaned_string = clean_string(adjectives_result,"")
     if adjectives_cleaned_string and sub_name not in adjectives_cleaned_string:
-        adjectives_combined_string = adjectives_cleaned_string + ',' + anomaly_word
+        adjectives_combined_string = adjectives_cleaned_string + '.' + anomaly_word
     else:
         adjectives_combined_string = anomaly_word
     print("clean_adjectives: ",adjectives_combined_string)
 
-    nouns_list = nouns_combined_string.split(',')
-    adjectives_list = adjectives_combined_string.split(',')
+    nouns_list = nouns_combined_string.split('.')
+    adjectives_list = adjectives_combined_string.split('.')
 
     combined_result = []
     for noun in nouns_list:
         for adjective in adjectives_list:
             combined_result.append(f"{adjective.strip()} {noun.strip()}")
 
-    finally_combined_string = ','.join(combined_result)
+    finally_combined_string = '.'.join(combined_result)
 
     return finally_combined_string
 
@@ -724,15 +753,15 @@ def classification_adjectiveclause_llama(tokenizer, model, tags, main_name, sub_
                                     I would like to divide them according to the degree to which they are related to {main_name} and {sub_name}.
                                     Please classify according to the information below.
 
-                                    1. Please classify nouns related to {main_name} into the Nouns list.
+                                    1. Please classify nouns related to {main_name} into the Nouns list. They should be listed in order of relevance.
                                     2. Please classify Nouns related to {sub_name} into the Adjectives list.
                                     3. Please delete objects that are not classified above.
                                     4. Outputs a list of each noun and adjective according to the system output format. noun: 'word, word'
 
                                     The noun list is
-                                        Nouns: word, word
+                                        Nouns: word,word
                                     The adjective list is
-                                        Adjective: word, word
+                                        Adjective: word,word
                                     Please save the results in the format
                                     """},]
     nouns_result = ""
@@ -772,7 +801,7 @@ def classification_adjectiveclause_llama(tokenizer, model, tags, main_name, sub_
 
     print('Finally Result')
     print("nouns: ",nouns_result)
-    nouns_cleaned_string = clean_string(nouns_result)
+    nouns_cleaned_string = clean_string(nouns_result, "")
     if nouns_cleaned_string:
         if main_name not in nouns_cleaned_string:
             nouns_combined_string = nouns_cleaned_string + ',' + main_name
@@ -785,13 +814,13 @@ def classification_adjectiveclause_llama(tokenizer, model, tags, main_name, sub_
     print('-'*100)
     
     llama_tags = ''
-    for word in nouns_combined_string.split(','):
+    for word in nouns_combined_string.split(',')[:3]:
         adjectives_messages = [{"role": "system", "content": """The assistant should always answer only by listing lowercase words in the following format: 'word, word'."""},
             {"role": "user", "content": f"""Objects recognized in the image include: {word}.
                                             I would like to create an adjective clause before the object tag to find anomaly parts of the recognized object in the image.
                                             
                                             Based on recognized object tags, adjectives or infinitives are converted to adjective clauses, creating a list that accurately specifies only the singular or unique part of the object.
-                                            Additionally, adjective clauses must be converted into 10 non-redundant results."""},]
+                                            Additionally, adjective clauses must be converted into 5 non-redundant results."""},]
         with torch.no_grad():
             input_ids = tokenizer.apply_chat_template(
                 adjectives_messages,
@@ -816,10 +845,15 @@ def classification_adjectiveclause_llama(tokenizer, model, tags, main_name, sub_
 
         adjectives_response = outputs[0][input_ids.shape[-1]:]
         adjectives_result = tokenizer.decode(adjectives_response, skip_special_tokens=True)
-        finally_result = add_word_to_each_item(adjectives_result, word)
-        finally_result = clean_string(finally_result)
+        print(word, ':',adjectives_result)
+        combination_result = add_word_to_each_item(adjectives_result, word)
+        print(word, ':',combination_result)
+        finally_result = clean_string(combination_result, word)
         print(word, ':', finally_result)
 
-        llama_tags = llama_tags + finally_result
+        llama_tags = llama_tags + ',' + finally_result
+
+    if llama_tags.startswith(","):
+        llama_tags = llama_tags[1:]
 
     return llama_tags
