@@ -6,7 +6,7 @@ Zero-Shot Anomaly Segmentation by DOT Prompt, a model designed to detect anomali
 This codebase utilizes Anaconda for managing environmental dependencies. Please follow these steps to set up the environment:
 1. **Download Anaconda:** [Click here](https://www.anaconda.com/download) to download Anaconda.
 2. **Clone the Repository:**
-Git Large File Storage (`git-lfs`) is required to download big size datasets in our repository. Clone the repository using the following command.
+Clone the repository using the following command.
    ```bash
    git clone https://github.com/sybeam27/DOT-Prompt
    ```
