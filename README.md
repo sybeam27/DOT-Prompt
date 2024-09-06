@@ -1,2 +1,2 @@
-# Zero-Shot Anomaly Segmentation by SYHW
-Zero-Shot Anomaly Segmentation by SYHW, a model designed to detect anomalies in images, precisely identify their locations, and restore abnormal images to normal using zero-shot segmentation and inpainting techniques. It compares the differences between abnormal and normal images to accurately identify the boundaries and locations of anomalies.
+# DOT Prompt: Dynamic Object-Aware Tagging Prompt for Texture Zero-Shot Anomlay Segmentation
+Zero-Shot Anomaly Segmentation by DOT Prompt, a model designed to detect anomalies in images, precisely identify their locations, and restore abnormal images to normal using LLM prompting and zero-shot segmentation techniques. 
