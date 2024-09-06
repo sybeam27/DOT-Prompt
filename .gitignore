@@ -134,41 +134,6 @@ GSA/outputs/
 
 GSA/.idea/
 
-# Python byte code, etc.
-IPA/__pycache__/
-
-# C/C++ object files/libraries
-IPA/*.o
-IPA/*.so
-
-# macOS
-IPA/**/.DS_Store
-
-# tmp
-IPA/~*
-
-# pretrained_models
-IPA/pretrained_models/big-lama
-
-# pytracking/pretrain/
-IPA/*.pth
-
-IPA/results/*
-
-# mvtec/*
-# results_image/*
-
-# sam*
-
-# model
-# SegmentAnything/weights/*
-dataset/*
-results_csv_sy/*
-results_image_hw/*
-results_image_sy/*
-
 checkpoints/*
 bf_work_file/*
-mvtec_parameters.py
-visa_parameters.py
-SegmentAnything/*
+datasets/*
