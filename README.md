@@ -24,6 +24,7 @@ Clone the repository using the following command.
      conda activate dot_zsas
      ```
 This will set up the environment required to run the codebase.
+
 ## Datasets
 Below are the details and download links for datasets used in our experiments:
 1. **MVTec-AD** [(Download)](https://www.mvtec.com/downloads): The MVTec AD dataset comprises approximately 5,000 images across 15 classes, including texture-related categories such as fabric and wood.
@@ -31,20 +32,23 @@ Below are the details and download links for datasets used in our experiments:
 3. **MTD** [(Download)](https://github.com/abin24/Magnetic-tile-defect-datasets.): The MTD dataset contains images of magnetic tiles, featuring various types of defects.
 These datasets provide valuable resources for our experiments and each known for their high-resolution, texture-rich images that are well-suited for texture anomaly segmentation.
 
-These commands preprocess the data for the specified dataset, generating periodic event graphs with or without residual nodes as required.
 ## Dynamic GNNs Link Prediction
-Replace `<dataset_name>` with one of the following options: `traffic`, `power`, `exchange`.
-Replace `<dgnn_model>` with one of the following options: `JODIE`, `DyRep`, `TGAT`, `TGN`, `GraphMixer`.
+Replace `<dataset_name>` with one of the following options: `mvtec`, `ksdd`, `mtd`.
+Replace `<model>` with one of the following options: `base`, `dot-zsas`.
+
 ```python
-python train_link_prediction.py --dataset_name <dataset_name>_peg_wo_residual --model_name <dgnn_model> --load_best_configs --num_runs 5 --num_epochs 10
+python ZSAS.py --dataset_name <dataset_name> --model_name <model> 
 ```
-This command trains a dynamic graph neural network for link prediction on the specified dataset using the selected model, with best configurations loaded, running 5 trials for 10 epochs each.
+This command excel our proposed model for zero-shot anomaly segmentation(ZSAS) on the specified dataset using the selected model, with best configurations loaded, running 10 epochs each.
+
 #### Optional arguments
 ```
   --dataset_name                    dataset to be used
 ```
+
 ## Special Thanks to
 We extend our gratitude to the authors of the following libraries for generously sharing their source code and dataset:
+
 [RAM](https://github.com/xinyu1205/recognize-anything),
 [SAM](https://github.com/facebookresearch/segment-anything),
 [Grounding DINO](https://github.com/IDEA-Research/GroundingDINO)
