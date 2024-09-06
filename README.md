@@ -49,7 +49,17 @@ python test_ablation.py --image True --prompt True --filter True
 
 #### Optional arguments
 ```
-  --dataset_name                    dataset to be used
+  --gpu                             gpu number
+  --dataset                         dataset name
+  --model                           model name
+  --box_threshold                   GroundingSAM box threshold
+  --text_threshold                  GroundingSAM text threshold
+  --size_threshold                  Bounding-box size threshold
+  --iou_threshold                   IoU threshold
+  --random_img_num                  random image extraction number
+  --eval_resolution                 Description of evaluation resolution
+  --exp_idx                         Description of experiment index
+  --version                         Description of evaluation version
 ```
 
 ## Special Thanks to
