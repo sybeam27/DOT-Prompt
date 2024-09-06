@@ -26,16 +26,9 @@ Clone the repository using the following command.
 This will set up the environment required to run the codebase.
 ## Datasets
 Below are the details and download links for datasets used in our experiments:
-### MVTec-AD
-[(Download)](https://www.mvtec.com/downloads)
-The MVTec AD dataset comprises approximately 5,000 images across 15 classes, including texture-related categories such as fabric and wood.
-### KSDD1
-[(Download)](https://www.vicos.si/resources/kolektorsdd/)
-The KSDD1 dataset includes 347 normal images and 52 abnormal images, specifically for detecting micro-defects on metal surfaces. 
-### MTD
-[(Download)](https://github.com/abin24/Magnetic-tile-defect-datasets)
-The MTD dataset contains images of magnetic tiles, featuring various types of defects.
-
+1. **MVTec-AD** [(Download)](https://www.mvtec.com/downloads): The MVTec AD dataset comprises approximately 5,000 images across 15 classes, including texture-related categories such as fabric and wood.
+2. **KSDD1** [(Download)](https://www.vicos.si/resources/kolektorsdd/): The KSDD1 dataset includes 347 normal images and 52 abnormal images, specifically for detecting micro-defects on metal surfaces.
+3. **MTD** [(Download)](https://github.com/abin24/Magnetic-tile-defect-datasets.): The MTD dataset contains images of magnetic tiles, featuring various types of defects.
 These datasets provide valuable resources for our experiments and each known for their high-resolution, texture-rich images that are well-suited for texture anomaly segmentation.
 
 These commands preprocess the data for the specified dataset, generating periodic event graphs with or without residual nodes as required.
