@@ -33,11 +33,12 @@ Below are the details and download links for datasets used in our experiments:
 These datasets provide valuable resources for our experiments and each known for their high-resolution, texture-rich images that are well-suited for texture anomaly segmentation.
 
 ## Zero-Shot Anomaly Segmentation (ZSAS) TEST
-Replace `<dataset_name>` with one of the following options: `mvtec`, `ksdd`, `mtd`.
-Replace `<model>` with one of the following options: `base`, `dot-zsas`.
+Replace `<dataset>` with one of the following options: `mvtec`, `ksdd`, `mtd`.
+
+Replace `<model>` with one of the following options: `base`, `dot_zsas`.
 
 ```python
-python test_zsas.py --dataset_name <dataset_name> --model_name <model> 
+python test_zsas.py --dataset <dataset name> --model <model name> 
 ```
 This command excel our proposed model for zero-shot anomaly segmentation(ZSAS) on the specified dataset using the selected model, with best configurations loaded, running 10 epochs each.
 
@@ -66,9 +67,10 @@ python test_ablation.py --image True --prompt True --filter True
 We extend our gratitude to the authors of the following libraries for generously sharing their source code and dataset:
 
 [RAM](https://github.com/xinyu1205/recognize-anything),
+[Llama3](https://github.com/meta-llama/llama3),
+[Grounding DINO](https://github.com/IDEA-Research/GroundingDINO),
 [SAM](https://github.com/facebookresearch/segment-anything),
-[Grounding DINO](https://github.com/IDEA-Research/GroundingDINO)
-[Llama3](https://github.com/meta-llama/llama3)
+[SAA+](https://github.com/caoyunkang/Segment-Any-Anomaly?tab=readme-ov-file)
 Your contributions are greatly appreciated.
 
 ## Citation
