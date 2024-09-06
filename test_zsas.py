@@ -1,10 +1,3 @@
-# 사용 방법
-
-'''
-python ZSAS_syhw_random.py --model "syhw" --exp_idx "random" --version 1 --dataset "mvtec" --random_num 10
-
-'''
-
 # setting
 # library
 import pdb
@@ -14,7 +7,8 @@ import os
 sys.path.append('./SegmentAnything/GroundingDINO')
 sys.path.append('./SegmentAnything/SAM')
 sys.path.append('./SegmentAnything')
-sys.path.append('./llama3')
+sys.path.append('./Llama3')
+sys.path.append('./utils')
 
 import random
 import argparse
@@ -36,8 +30,6 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from torchvision.ops import box_convert
 import torchvision.ops as ops
-# import spacy
-# from llama import Llama, Dialog
 from ram import inference_ram
 from ram.models import ram
 import supervision as sv
@@ -50,21 +42,21 @@ from SegmentAnything.utils.csv_utils import *
 from SegmentAnything.utils.eval_utils import *
 from SegmentAnything.utils.metrics import *
 from SegmentAnything.utils.training_utils import *
-from ZSAS_funtion import load_image, load_model, normalize, setup_seed, eval_zsas, eval_zsas_last, \
-    process_object_output, process_box_output_plus, process_anomaly_tags, process_box_output, process_size_output, \
-    process_anomaly_segmentation, process_draw_boxes, process_draw_masks, process_extract_object_nouns, \
-    process_specify_resolution, process_object_output_2, process_anomaly_tags_2, process_box_output_2, process_object_output_3, get_anomaly_number, convert_bmp_to_png
+from utils.function import load_image, load_model, normalize, setup_seed, eval_zsas_last, \
+    process_object_output, process_box_output, process_size_output, \
+    process_anomaly_segmentation, process_draw_boxes, process_draw_masks, \
+    process_specify_resolution, process_anomaly_tags_2, get_anomaly_number, convert_bmp_to_png
 
 # ArgumentParser 
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--gpu', type=str, default="0", help='gpu_number')
 parser.add_argument('--dataset', type=str, default="mvtec", help='dataset_name')
-parser.add_argument('--model', type=str, default="syhw", help='model_name')
-parser.add_argument('--box_threshold', type=float, default=0.1, help='GroundingSAM box_threshold')
-parser.add_argument('--text_threshold', type=float, default=0.1, help='GroundingSAM text_threshold')
-parser.add_argument('--size_threshold', type=float, default=0.8, help='Bounding-box size_threshold')
-parser.add_argument('--iou_threshold', type=float, default=0.5, help='iou_threshold')
-parser.add_argument('--random_num', type=int, default=10, help='random image extraction number')
+parser.add_argument('--model', type=str, default="dot-zsas", help='model_name')
+parser.add_argument('--box_threshold', type=float, default=0.1, help='GroundingSAM box threshold')
+parser.add_argument('--text_threshold', type=float, default=0.1, help='GroundingSAM text threshold')
+parser.add_argument('--size_threshold', type=float, default=0.8, help='Bounding-box size threshold')
+parser.add_argument('--iou_threshold', type=float, default=0.5, help='IOU threshold')
+parser.add_argument('--random_img_num', type=int, default=10, help='random image extraction number')
 parser.add_argument('--eval_resolution', type=int, default=400, help='Description of evaluation resolution')
 parser.add_argument('--exp_idx', type=str, default='random', help='Description of experiment index')
 parser.add_argument('--version', type=int, default=1, help='Description of evaluation version')
@@ -75,16 +67,15 @@ box_threshold = args.box_threshold
 text_threshold = args.text_threshold
 threshold = args.size_threshold
 iou_threshold = args.iou_threshold
-random_num = args.random_num
+random_num = args.random_img_num
 dataset_name = args.dataset
 model_name = args.model
 experiment_index = args.exp_idx
 version = args.version
 eval_resolution = args.eval_resolution
 
-print("-" * 50, 'MODEL LOAD START', "-" * 50)
 
-# load model
+print("-" * 50, 'MODEL LOAD START', "-" * 50)
 DEVICE = torch.device(f"cuda:{gpu_number}" if torch.cuda.is_available() else 'cpu')
 SELECT_SAM_HQ = False
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'

@@ -1,10 +1,3 @@
-# 사용 방법
-
-'''
-python ZSAS_syhw_ablation.py --image True --prompt True --filter True --exp_idx "0902_image_prompt_filter" --version 1
-
-'''
-
 # setting
 # library
 import pdb

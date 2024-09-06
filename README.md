@@ -32,14 +32,20 @@ Below are the details and download links for datasets used in our experiments:
 3. **MTD** [(Download)](https://github.com/abin24/Magnetic-tile-defect-datasets.): The MTD dataset contains images of magnetic tiles, featuring various types of defects.
 These datasets provide valuable resources for our experiments and each known for their high-resolution, texture-rich images that are well-suited for texture anomaly segmentation.
 
-## Dynamic GNNs Link Prediction
+## Zero-Shot Anomaly Segmentation (ZSAS) TEST
 Replace `<dataset_name>` with one of the following options: `mvtec`, `ksdd`, `mtd`.
 Replace `<model>` with one of the following options: `base`, `dot-zsas`.
 
 ```python
-python ZSAS.py --dataset_name <dataset_name> --model_name <model> 
+python test_zsas.py --dataset_name <dataset_name> --model_name <model> 
 ```
 This command excel our proposed model for zero-shot anomaly segmentation(ZSAS) on the specified dataset using the selected model, with best configurations loaded, running 10 epochs each.
+
+## Ablation Study TEST
+Ablatin study on MVTec-AD texture dataset.
+```python
+python test_ablation.py --image True --prompt True --filter True 
+```
 
 #### Optional arguments
 ```
