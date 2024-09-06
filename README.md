@@ -52,6 +52,7 @@ We extend our gratitude to the authors of the following libraries for generously
 [RAM](https://github.com/xinyu1205/recognize-anything),
 [SAM](https://github.com/facebookresearch/segment-anything),
 [Grounding DINO](https://github.com/IDEA-Research/GroundingDINO)
+[Llama3](https://github.com/meta-llama/llama3)
 Your contributions are greatly appreciated.
 
 ## Citation
