@@ -12,7 +12,7 @@ Clone the repository using the following command.
 3. **Install Requirements:**
    - Navigate to the cloned repository:
      ```bash
-     cd DOT-ZSAS
+     cd DOT-Prompt-ZSAS
      ```
    - Create a Conda environment from the provided `environment.yaml` file:
      ```bash
@@ -20,7 +20,7 @@ Clone the repository using the following command.
      ```
    - Activate the Conda environment:
      ```bash
-     conda activate dot_zsas
+     conda activate dot_as
      ```
 This will set up the environment required to run the codebase.
 
